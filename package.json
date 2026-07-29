@@ -1,0 +1,32 @@
+{
+  "name": "traceguard",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ellaa0906/TraceGuard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Ellaa0906/TraceGuard/issues"
+  },
+  "homepage": "https://github.com/Ellaa0906/TraceGuard#readme",
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "hardhat": "^3.11.1",
+    "typescript": "~6.0.3"
+  },
+  "dependencies": {
+    "ethers": "^6.17.0"
+  }
+}

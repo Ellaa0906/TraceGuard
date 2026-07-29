@@ -1,4 +1,4 @@
-Contract Address: 0x[paste your copied address]
+Contract Address: 0x[0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9]
 Network: Hardhat Local
 RPC URL: http://127.0.0.1:8545
 Chain ID: 31337
