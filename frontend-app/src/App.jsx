@@ -16,8 +16,8 @@ function App() {
   // Status message
   const [message, setMessage] = useState("");
 
+  // ---------------- ADD BATCH ----------------
 
-  // Add Batch Function
   async function addBatch() {
 
     try {
@@ -35,219 +35,201 @@ function App() {
 
       setMessage("Batch added successfully ✅");
 
-    } catch(error) {
+    } catch (error) {
 
-      console.log(error);
-      setMessage("Failed to add batch ❌");
+      console.error("Add Batch Error:", error);
+
+      if (error.reason) {
+        setMessage(error.reason);
+      }
+      else if (error.shortMessage) {
+        setMessage(error.shortMessage);
+      }
+      else if (error.message) {
+        setMessage(error.message);
+      }
+      else {
+        setMessage("Failed to add batch ❌");
+      }
 
     }
 
   }
 
+  // ---------------- GET BATCH DETAILS ----------------
 
+  async function getBatchDetails() {
 
-  // Get Batch Details Function
- async function getBatchDetails() {
+    try {
 
-  try {
+      const contract = await getContract();
 
-    const contract = await getContract();
+      const batch = await contract.getBatchDetails(searchId);
 
-    const batch = await contract.getBatchDetails(searchId);
+      console.log(batch);
 
-    console.log("Batch data:", batch);
+      setBatchDetails(batch);
 
-    setBatchDetails(batch);
+      setMessage("Batch found ✅");
 
-    setMessage("Batch found ✅");
+    } catch (error) {
 
-  } catch(error) {
+      console.error("Search Error:", error);
 
-    console.log(error);
-    setMessage("Batch not found ❌");
+      if (error.reason) {
+        setMessage(error.reason);
+      }
+      else if (error.shortMessage) {
+        setMessage(error.shortMessage);
+      }
+      else if (error.message) {
+        setMessage(error.message);
+      }
+      else {
+        setMessage("Batch not found ❌");
+      }
+
+    }
 
   }
 
-}
+  // ---------------- CHECK STATUS ----------------
 
+  async function checkStatus() {
 
-
-  // Check Status Function
-  async function checkStatus(){
-
-    try{
+    try {
 
       const contract = await getContract();
 
       const status = await contract.checkStatus(searchId);
 
-      setMessage(
-        "Product Status: " + status
-      );
+      setMessage("Product Status : " + status);
 
-    }
-    catch(error){
+    } catch (error) {
 
-      console.log(error);
+      console.error("Status Error:", error);
+
+      if (error.reason) {
+        setMessage(error.reason);
+      }
+      else if (error.shortMessage) {
+        setMessage(error.shortMessage);
+      }
+      else if (error.message) {
+        setMessage(error.message);
+      }
 
     }
 
   }
 
-
-
   return (
 
-    <div style={{padding:"30px"}}>
-
+    <div style={{ padding: "30px" }}>
 
       <h1>TraceGuard Blockchain Supply Chain</h1>
-
 
       {/* ADD BATCH */}
 
       <h2>Add Product Batch</h2>
 
-
       <input
         placeholder="Batch ID"
-        onChange={(e)=>setBatchId(e.target.value)}
+        value={batchId}
+        onChange={(e) => setBatchId(e.target.value)}
       />
 
-      <br/><br/>
-
+      <br /><br />
 
       <input
         placeholder="Product Name"
-        onChange={(e)=>setProductName(e.target.value)}
+        value={productName}
+        onChange={(e) => setProductName(e.target.value)}
       />
 
-      <br/><br/>
-
+      <br /><br />
 
       <input
         placeholder="Manufacturing Date"
-        onChange={(e)=>setMfgDate(e.target.value)}
+        value={mfgDate}
+        onChange={(e) => setMfgDate(e.target.value)}
       />
 
-      <br/><br/>
-
+      <br /><br />
 
       <input
         placeholder="Expiry Date"
-        onChange={(e)=>setExpiryDate(e.target.value)}
+        value={expiryDate}
+        onChange={(e) => setExpiryDate(e.target.value)}
       />
 
-      <br/><br/>
-
+      <br /><br />
 
       <button onClick={addBatch}>
         Add Batch
       </button>
 
+      <hr />
 
-
-      <hr/>
-
-
-      {/* VIEW BATCH */}
+      {/* SEARCH */}
 
       <h2>View Batch Details</h2>
 
-
       <input
         placeholder="Enter Batch ID"
-        onChange={(e)=>setSearchId(e.target.value)}
+        value={searchId}
+        onChange={(e) => setSearchId(e.target.value)}
       />
 
-      <br/><br/>
-
+      <br /><br />
 
       <button onClick={getBatchDetails}>
         Search Batch
       </button>
 
-
       <button onClick={checkStatus}>
         Check Status
       </button>
 
+      <br /><br />
 
+      {batchDetails && (
 
-      <br/><br/>
+        <div>
 
+          <h3>Batch Information</h3>
 
-      {
-        batchDetails && (
+          <p><b>Batch ID:</b> {batchDetails[0]}</p>
 
-          <div>
+          <p><b>Product Name:</b> {batchDetails[1]}</p>
 
-            <h3>Batch Information</h3>
+          <p><b>Manufacturer:</b> {batchDetails[2]}</p>
 
+          <p><b>Manufacturing Date:</b> {batchDetails[3]}</p>
 
-            <p>
-              Batch ID: {batchDetails[0]}
-            </p>
+          <p><b>Expiry Date:</b> {batchDetails[4]}</p>
 
+          <p><b>Current Owner:</b> {batchDetails[5]}</p>
 
-            <p>
-              Product Name: {batchDetails[1]}
-            </p>
+          <p>
+            <b>Recalled:</b>{" "}
+            {batchDetails[6] ? "YES" : "NO"}
+          </p>
 
+          <p><b>Recall Reason:</b> {batchDetails[7]}</p>
 
-            <p>
-              Manufacturer: {batchDetails[2]}
-            </p>
+        </div>
 
+      )}
 
-            <p>
-              Manufacturing Date: {batchDetails[3]}
-            </p>
+      <br />
 
-
-            <p>
-              Expiry Date: {batchDetails[4]}
-            </p>
-
-
-            <p>
-              Current Owner: {batchDetails[5]}
-            </p>
-
-
-            <p>
-              Recalled:
-              {
-                batchDetails[6]
-                ? " YES"
-                : " NO"
-              }
-            </p>
-
-
-            <p>
-              Recall Reason:
-              {batchDetails[7]}
-            </p>
-
-
-          </div>
-
-        )
-      }
-
-
-
-      <h3>
-        {message}
-      </h3>
-
+      <h3>{message}</h3>
 
     </div>
 
   );
 
 }
-
 
 export default App;
