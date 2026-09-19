@@ -2,12 +2,10 @@ import { useState, useEffect } from "react";
 import { getContract } from "./contract";
 import "./App.css";
 
-const ROLE_NAMES = ["None", "Manufacturer", "Distributor", "Retailer"];
-
 function App() {
   const [account, setAccount] = useState(null);
-  const [role, setRole] = useState(null);
-  const [activeTab, setActiveTab] = useState("home");
+  const [currentRole, setCurrentRole] = useState("Manufacturer");
+  const [activeTab, setActiveTab] = useState("create");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -16,21 +14,29 @@ function App() {
   const [productName, setProductName] = useState("");
   const [mfgDate, setMfgDate] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
-  const [distributorAddr, setDistributorAddr] = useState("");
 
   // Transfer
   const [transferBatchId, setTransferBatchId] = useState("");
-  const [newOwner, setNewOwner] = useState("");
+  const [transferTo, setTransferTo] = useState("");
+  const [transferRole, setTransferRole] = useState("Distributor");
+
+  // Report Problem
+  const [problemBatchId, setProblemBatchId] = useState("");
+  const [problemText, setProblemText] = useState("");
 
   // Recall
   const [recallBatchId, setRecallBatchId] = useState("");
   const [recallReason, setRecallReason] = useState("");
 
-  // Track / Search
+  // Track
   const [trackId, setTrackId] = useState("");
   const [batchDetails, setBatchDetails] = useState(null);
-  const [status, setStatus] = useState(null);
-  const [history, setHistory] = useState([]);
+  const [problemReport, setProblemReport] = useState(null);
+
+  useEffect(() => {
+    if (currentRole === "Manufacturer") setTransferRole("Distributor");
+    if (currentRole === "Distributor") setTransferRole("Retailer");
+  }, [currentRole]);
 
   async function withLoading(fn) {
     setLoading(true);
@@ -50,42 +56,37 @@ function App() {
       const contract = await getContract();
       const signerAddress = await contract.runner.getAddress();
       setAccount(signerAddress);
-
-      const roleValue = await contract.getRole(signerAddress);
-      setRole(Number(roleValue));
-
       setMessage("Wallet connected.");
     });
   }
 
-  async function addBatch() {
+  async function createBatch() {
     withLoading(async () => {
       const contract = await getContract();
-      const tx = await contract.addBatch(
-        batchId,
-        productName,
-        mfgDate,
-        expiryDate,
-        distributorAddr
-      );
+      const tx = await contract.createBatch(batchId, productName, mfgDate, expiryDate);
       await tx.wait();
-      setMessage("Batch created and assigned to distributor.");
-      setBatchId("");
-      setProductName("");
-      setMfgDate("");
-      setExpiryDate("");
-      setDistributorAddr("");
+      setMessage("Batch created on-chain.");
+      setBatchId(""); setProductName(""); setMfgDate(""); setExpiryDate("");
     });
   }
 
-  async function transferOwnership() {
+  async function transferBatch() {
     withLoading(async () => {
       const contract = await getContract();
-      const tx = await contract.transferOwnership(transferBatchId, newOwner);
+      const tx = await contract.transferBatch(transferBatchId, transferTo, transferRole);
       await tx.wait();
-      setMessage("Custody transferred.");
-      setTransferBatchId("");
-      setNewOwner("");
+      setMessage(`Batch transferred to ${transferRole}.`);
+      setTransferBatchId(""); setTransferTo("");
+    });
+  }
+
+  async function reportProblem() {
+    withLoading(async () => {
+      const contract = await getContract();
+      const tx = await contract.reportProblem(problemBatchId, problemText);
+      await tx.wait();
+      setMessage("Problem reported on-chain.");
+      setProblemBatchId(""); setProblemText("");
     });
   }
 
@@ -94,28 +95,31 @@ function App() {
       const contract = await getContract();
       const tx = await contract.recallBatch(recallBatchId, recallReason);
       await tx.wait();
-      setMessage("Recall filed. All holders of this batch will see the alert.");
-      setRecallBatchId("");
-      setRecallReason("");
+      setMessage("Batch recalled.");
+      setRecallBatchId(""); setRecallReason("");
     });
   }
 
   async function trackBatch() {
     withLoading(async () => {
       const contract = await getContract();
-      const batch = await contract.getBatchDetails(trackId);
-      const statusResult = await contract.checkStatus(trackId);
-      const historyResult = await contract.getTransferHistory(trackId);
-
+      const batch = await contract.getBatch(trackId);
       setBatchDetails(batch);
-      setStatus(statusResult);
-      setHistory(historyResult);
+
+      try {
+        const report = await contract.getProblemReport(trackId);
+        setProblemReport(report[3] ? report : null);
+      } catch {
+        setProblemReport(null);
+      }
+
       setMessage("Batch record retrieved.");
     });
   }
 
-  function roleLabel(r) {
-    return ROLE_NAMES[r] || "Unknown";
+  function shortAddr(addr) {
+    if (!addr || addr === "0x0000000000000000000000000000000000000000") return "—";
+    return addr.slice(0, 6) + "..." + addr.slice(-4);
   }
 
   function formatTimestamp(ts) {
@@ -124,38 +128,13 @@ function App() {
     return new Date(n * 1000).toLocaleString();
   }
 
-  function shortAddr(addr) {
-    if (!addr || addr === "0x0000000000000000000000000000000000000000") return "—";
-    return addr.slice(0, 6) + "..." + addr.slice(-4);
-  }
-
-  const tabsByRole = {
-    1: [ // Manufacturer
-      { id: "home", label: "Overview" },
-      { id: "create", label: "Create Batch" },
-      { id: "track", label: "Track Batch" },
-      { id: "recall", label: "Recall" },
-    ],
-    2: [ // Distributor
-      { id: "home", label: "Overview" },
-      { id: "track", label: "Track Batch" },
-      { id: "transfer", label: "Transfer to Retailer" },
-    ],
-    3: [ // Retailer
-      { id: "home", label: "Overview" },
-      { id: "track", label: "Track Batch" },
-    ],
-  };
-
-  const tabs = role ? (tabsByRole[role] || tabsByRole[1]) : [{ id: "home", label: "Overview" }];
-
-  const isRecalledAndInvolved =
-    batchDetails &&
-    status === "RECALLED" &&
-    account &&
-    [batchDetails[2], batchDetails[3], batchDetails[4], batchDetails[7]]
-      .map((a) => (a || "").toLowerCase())
-      .includes(account.toLowerCase());
+  const tabs = [
+    { id: "create", label: "Create Batch" },
+    { id: "transfer", label: "Transfer" },
+    { id: "problem", label: "Report Problem" },
+    { id: "recall", label: "Recall" },
+    { id: "track", label: "Track Batch" },
+  ];
 
   return (
     <div className="app">
@@ -176,15 +155,29 @@ function App() {
           ) : (
             <div className="wallet-info">
               <span className="mono">{shortAddr(account)}</span>
-              <span className={"role-pill role-" + role}>{roleLabel(role)}</span>
+              <select
+                className="role-select"
+                value={currentRole}
+                onChange={(e) => setCurrentRole(e.target.value)}
+              >
+                <option value="Manufacturer">🏭 Manufacturer</option>
+                <option value="Distributor">🚚 Distributor</option>
+                <option value="Retailer">🏪 Retailer</option>
+              </select>
             </div>
           )}
         </div>
       </header>
 
+      {account && (
+        <div className="role-banner">
+          Connected as <b>{currentRole}</b> — {shortAddr(account)}
+        </div>
+      )}
+
       {!account && (
         <div className="empty-state">
-          <p>Connect your wallet to see your MedSafe dashboard.</p>
+          <p>Connect your wallet to use MedSafe.</p>
         </div>
       )}
 
@@ -203,29 +196,16 @@ function App() {
           </nav>
 
           <main className="panel">
-            {activeTab === "home" && (
-              <section>
-                <h2>{roleLabel(role)} Dashboard</h2>
-                <p className="section-sub">
-                  {role === 1 && "Create batches, assign them to a distributor, and file recalls if a defect is found."}
-                  {role === 2 && "Track batches assigned to you and transfer them onward to a retailer."}
-                  {role === 3 && "Track batches you've received and watch for recall alerts."}
-                  {!role && "Connected wallet has no assigned role yet."}
-                </p>
-                <p className="hint">Use the <b>Track Batch</b> tab any time to look up a Batch ID and see its full chain of custody.</p>
-              </section>
-            )}
-
-            {activeTab === "create" && role === 1 && (
+            {activeTab === "create" && (
               <section>
                 <h2>Create a Batch</h2>
-                <p className="section-sub">Registers a new batch and assigns it to a distributor's wallet address.</p>
+                <p className="section-sub">Registers a new batch. Your connected address becomes the manufacturer.</p>
                 <div className="field-grid">
                   <label>Batch ID
-                    <input placeholder="MED101" value={batchId} onChange={(e) => setBatchId(e.target.value)} />
+                    <input placeholder="102" value={batchId} onChange={(e) => setBatchId(e.target.value)} />
                   </label>
                   <label>Product Name
-                    <input placeholder="Vaccine A" value={productName} onChange={(e) => setProductName(e.target.value)} />
+                    <input placeholder="Paracetamol" value={productName} onChange={(e) => setProductName(e.target.value)} />
                   </label>
                   <label>Manufacturing Date
                     <input placeholder="DD-MM-YYYY" value={mfgDate} onChange={(e) => setMfgDate(e.target.value)} />
@@ -233,48 +213,69 @@ function App() {
                   <label>Expiry Date
                     <input placeholder="DD-MM-YYYY" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
                   </label>
-                  <label className="span-2">Distributor Address
-                    <input placeholder="0x..." value={distributorAddr} onChange={(e) => setDistributorAddr(e.target.value)} />
-                  </label>
                 </div>
-                <button className="btn-primary" onClick={addBatch} disabled={loading}>
+                <button className="btn-primary" onClick={createBatch} disabled={loading}>
                   {loading ? "Creating…" : "Create Batch"}
                 </button>
               </section>
             )}
 
-            {activeTab === "transfer" && (role === 2 || role === 3) && (
+            {activeTab === "transfer" && (
               <section>
-                <h2>Transfer Custody</h2>
-                <p className="section-sub">Only the current holder of a batch can transfer it onward.</p>
+                <h2>Transfer Batch</h2>
+                <p className="section-sub">Only the current owner of a batch can transfer it. Choose the role the receiving address plays.</p>
                 <div className="field-grid">
                   <label>Batch ID
-                    <input placeholder="MED101" value={transferBatchId} onChange={(e) => setTransferBatchId(e.target.value)} />
+                    <input placeholder="102" value={transferBatchId} onChange={(e) => setTransferBatchId(e.target.value)} />
                   </label>
-                  <label>New Owner Address
-                    <input placeholder="0x..." value={newOwner} onChange={(e) => setNewOwner(e.target.value)} />
+                  <label>Transfer To (Address)
+                    <input placeholder="0x..." value={transferTo} onChange={(e) => setTransferTo(e.target.value)} />
+                  </label>
+                  <label>Recipient Role
+                    <select value={transferRole} onChange={(e) => setTransferRole(e.target.value)}>
+                      <option value="Distributor">Distributor</option>
+                      <option value="Retailer">Retailer</option>
+                    </select>
                   </label>
                 </div>
-                <button className="btn-primary" onClick={transferOwnership} disabled={loading}>
-                  {loading ? "Transferring…" : "Transfer"}
+                <button className="btn-primary" onClick={transferBatch} disabled={loading}>
+                  {loading ? "Transferring…" : "Transfer Batch"}
                 </button>
               </section>
             )}
 
-            {activeTab === "recall" && role === 1 && (
+            {activeTab === "problem" && (
               <section>
-                <h2>File a Recall</h2>
-                <p className="section-sub">Only the manufacturer of a batch can recall it. All current and past holders will see the alert when they track it.</p>
+                <h2>Report a Problem</h2>
+                <p className="section-sub">Records an issue with a batch on-chain. Batch must not already be recalled.</p>
                 <div className="field-grid">
                   <label>Batch ID
-                    <input placeholder="MED101" value={recallBatchId} onChange={(e) => setRecallBatchId(e.target.value)} />
+                    <input placeholder="102" value={problemBatchId} onChange={(e) => setProblemBatchId(e.target.value)} />
+                  </label>
+                  <label>Problem Description
+                    <input placeholder="Packaging damaged in transit" value={problemText} onChange={(e) => setProblemText(e.target.value)} />
+                  </label>
+                </div>
+                <button className="btn-danger" onClick={reportProblem} disabled={loading}>
+                  {loading ? "Reporting…" : "Report Problem"}
+                </button>
+              </section>
+            )}
+
+            {activeTab === "recall" && (
+              <section>
+                <h2>Recall Batch</h2>
+                <p className="section-sub">Only the manufacturer of a batch can recall it.</p>
+                <div className="field-grid">
+                  <label>Batch ID
+                    <input placeholder="102" value={recallBatchId} onChange={(e) => setRecallBatchId(e.target.value)} />
                   </label>
                   <label>Reason
-                    <input placeholder="Contamination detected" value={recallReason} onChange={(e) => setRecallReason(e.target.value)} />
+                    <input placeholder="Quality issue detected" value={recallReason} onChange={(e) => setRecallReason(e.target.value)} />
                   </label>
                 </div>
                 <button className="btn-danger" onClick={recallBatch} disabled={loading}>
-                  {loading ? "Filing…" : "Recall Batch"}
+                  {loading ? "Recalling…" : "Recall Batch"}
                 </button>
               </section>
             )}
@@ -282,26 +283,20 @@ function App() {
             {activeTab === "track" && (
               <section>
                 <h2>Track a Batch</h2>
-                <p className="section-sub">Enter a Batch ID to see its full chain of custody and current status.</p>
+                <p className="section-sub">Enter a Batch ID to see its full record and history.</p>
                 <div className="field-grid">
                   <label>Batch ID
-                    <input placeholder="MED101" value={trackId} onChange={(e) => setTrackId(e.target.value)} />
+                    <input placeholder="102" value={trackId} onChange={(e) => setTrackId(e.target.value)} />
                   </label>
                 </div>
                 <button className="btn-secondary" onClick={trackBatch} disabled={loading}>
                   {loading ? "Searching…" : "Track Batch"}
                 </button>
 
-                {isRecalledAndInvolved && (
-                  <div className="alert-banner">
-                    🚨 RECALL ALERT — this batch involves your address. Reason: {batchDetails[8]}
-                  </div>
-                )}
-
                 {batchDetails && (
                   <div className="track-result">
-                    <div className={status === "RECALLED" ? "stamp stamp-recalled" : "stamp stamp-safe"}>
-                      {status}
+                    <div className={batchDetails[8] ? "stamp stamp-recalled" : "stamp stamp-safe"}>
+                      {batchDetails[8] ? "RECALLED" : "SAFE"}
                     </div>
 
                     <dl>
@@ -316,36 +311,20 @@ function App() {
                       <dt>Recall Reason</dt><dd>{batchDetails[9] || "—"}</dd>
                     </dl>
 
-                    <h3 className="timeline-title">Chain of Custody</h3>
-                    <div className="timeline">
-                      <div className="timeline-step">
-                        <span className="dot dot-start" />
-                        <div>
-                          <p className="timeline-label">Created</p>
-                          <p className="mono small">{shortAddr(batchDetails[2])}</p>
-                        </div>
+                    {problemReport && (
+                      <div className="alert-banner">
+                        ⚠️ Problem reported by {shortAddr(problemReport[0])}: "{problemReport[1]}" on {formatTimestamp(problemReport[2])}
                       </div>
+                    )}
 
-                      {history.map((h, i) => (
+                    <h3 className="timeline-title">Transfer History</h3>
+                    <div className="timeline">
+                      {batchDetails[10].map((entry, i) => (
                         <div className="timeline-step" key={i}>
-                          <span className="dot" />
-                          <div>
-                            <p className="timeline-label">Transferred</p>
-                            <p className="mono small">{shortAddr(h[0])} → {shortAddr(h[1])}</p>
-                            <p className="timestamp">{formatTimestamp(h[2])}</p>
-                          </div>
+                          <span className={entry.toLowerCase().includes("recalled") ? "dot dot-recalled" : "dot"} />
+                          <p className="timeline-label">{entry}</p>
                         </div>
                       ))}
-
-                      {status === "RECALLED" && (
-                        <div className="timeline-step">
-                          <span className="dot dot-recalled" />
-                          <div>
-                            <p className="timeline-label recalled-label">Recalled</p>
-                            <p className="small">{batchDetails[9]}</p>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
