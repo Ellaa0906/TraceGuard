@@ -1,33 +1,5 @@
 [
 	{
-		"inputs": [
-			{
-				"internalType": "string",
-				"name": "_batchId",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "_productName",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "_mfgDate",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "_expiryDate",
-				"type": "string"
-			}
-		],
-		"name": "addBatch",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -91,22 +63,23 @@
 		"type": "event"
 	},
 	{
+		"anonymous": false,
 		"inputs": [
 			{
-				"internalType": "string",
-				"name": "_batchId",
-				"type": "string"
+				"indexed": false,
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
 			},
 			{
-				"internalType": "string",
-				"name": "_reason",
-				"type": "string"
+				"indexed": false,
+				"internalType": "enum MedSafe.Role",
+				"name": "role",
+				"type": "uint8"
 			}
 		],
-		"name": "recallBatch",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
+		"name": "RoleAssigned",
+		"type": "event"
 	},
 	{
 		"inputs": [
@@ -116,12 +89,45 @@
 				"type": "string"
 			},
 			{
+				"internalType": "string",
+				"name": "_productName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_mfgDate",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_expiryDate",
+				"type": "string"
+			},
+			{
 				"internalType": "address",
-				"name": "_newOwner",
+				"name": "_distributor",
 				"type": "address"
 			}
 		],
-		"name": "transferOwnership",
+		"name": "addBatch",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_account",
+				"type": "address"
+			},
+			{
+				"internalType": "enum MedSafe.Role",
+				"name": "_role",
+				"type": "uint8"
+			}
+		],
+		"name": "assignRole",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -149,6 +155,16 @@
 			{
 				"internalType": "address",
 				"name": "manufacturer",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "distributor",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "retailer",
 				"type": "address"
 			},
 			{
@@ -227,6 +243,16 @@
 						"type": "address"
 					},
 					{
+						"internalType": "address",
+						"name": "distributor",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "retailer",
+						"type": "address"
+					},
+					{
 						"internalType": "string",
 						"name": "mfgDate",
 						"type": "string"
@@ -252,12 +278,156 @@
 						"type": "string"
 					}
 				],
-				"internalType": "struct TraceGuard.Batch",
+				"internalType": "struct MedSafe.Batch",
 				"name": "",
 				"type": "tuple"
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_account",
+				"type": "address"
+			}
+		],
+		"name": "getRole",
+		"outputs": [
+			{
+				"internalType": "enum MedSafe.Role",
+				"name": "",
+				"type": "uint8"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_batchId",
+				"type": "string"
+			}
+		],
+		"name": "getTransferHistory",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "address",
+						"name": "from",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "timestamp",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct MedSafe.TransferRecord[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_batchId",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_reason",
+				"type": "string"
+			}
+		],
+		"name": "recallBatch",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "roles",
+		"outputs": [
+			{
+				"internalType": "enum MedSafe.Role",
+				"name": "",
+				"type": "uint8"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "transferHistory",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_batchId",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "_newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	}
 ]
