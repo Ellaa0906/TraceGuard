@@ -1,0 +1,42 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_20-c36005d8d5bf0428929447e2663232ad4ce09851",
+  "solcVersion": "0.8.20",
+  "solcLongVersion": "0.8.20+commit.a1b79de6",
+  "compilerType": "solc",
+  "userSourceNameMap": {
+    "contracts/MedSafe.sol": "project/contracts/MedSafe.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "shanghai",
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode.linkReferences",
+            "evm.bytecode.object",
+            "evm.bytecode.opcodes",
+            "evm.bytecode.sourceMap",
+            "evm.deployedBytecode.immutableReferences",
+            "evm.deployedBytecode.linkReferences",
+            "evm.deployedBytecode.object",
+            "evm.deployedBytecode.opcodes",
+            "evm.deployedBytecode.sourceMap",
+            "evm.methodIdentifiers"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/MedSafe.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.0;\r\n\r\ncontract MedSafe {\r\n    struct Batch {\r\n        string batchId;\r\n        string productName;\r\n        address manufacturer;\r\n        address distributor;\r\n        address retailer;\r\n        string mfgDate;\r\n        string expiryDate;\r\n        address currentOwner;\r\n        bool isRecalled;\r\n        string recallReason;\r\n        string[] transferHistory;\r\n    }\r\n\r\n    struct ProblemReport {\r\n        address reportedBy;\r\n        string problem;\r\n        uint256 timestamp;\r\n        bool exists;\r\n    }\r\n\r\n    // Mappings\r\n    mapping(string => Batch) public batches;\r\n    mapping(string => ProblemReport) public problemReports;\r\n    string[] public allBatchIds;\r\n\r\n    // Events\r\n    event BatchCreated(string batchId, string productName, address manufacturer, string mfgDate, string expiryDate);\r\n    event BatchTransferred(string batchId, address from, address to, string role);\r\n    event BatchRecalled(string batchId, string reason);\r\n    event ProblemReported(string batchId, address reportedBy, string problem, uint256 timestamp);\r\n\r\n    // 1. Create Batch (Manufacturer)\r\n    function createBatch(\r\n        string memory _batchId,\r\n        string memory _productName,\r\n        string memory _mfgDate,\r\n        string memory _expiryDate\r\n    ) public {\r\n        require(bytes(batches[_batchId].batchId).length == 0, \"Batch already exists\");\r\n\r\n        string[] memory initialHistory = new string[](1);\r\n        initialHistory[0] = \"Created by Manufacturer\";\r\n\r\n        batches[_batchId] = Batch({\r\n            batchId: _batchId,\r\n            productName: _productName,\r\n            manufacturer: msg.sender,\r\n            distributor: address(0),\r\n            retailer: address(0),\r\n            mfgDate: _mfgDate,\r\n            expiryDate: _expiryDate,\r\n            currentOwner: msg.sender,\r\n            isRecalled: false,\r\n            recallReason: \"\",\r\n            transferHistory: initialHistory\r\n        });\r\n\r\n        allBatchIds.push(_batchId);\r\n        emit BatchCreated(_batchId, _productName, msg.sender, _mfgDate, _expiryDate);\r\n    }\r\n\r\n    // 2. Transfer Batch (Manufacturer -> Distributor -> Retailer)\r\n    function transferBatch(string memory _batchId, address _to, string memory _role) public {\r\n        Batch storage batch = batches[_batchId];\r\n        require(bytes(batch.batchId).length > 0, \"Batch does not exist\");\r\n        require(msg.sender == batch.currentOwner, \"Only current owner can transfer\");\r\n        require(!batch.isRecalled, \"Cannot transfer a recalled batch\");\r\n\r\n        address previousOwner = batch.currentOwner;\r\n        batch.currentOwner = _to;\r\n\r\n        if (keccak256(bytes(_role)) == keccak256(bytes(\"Distributor\"))) {\r\n            batch.distributor = _to;\r\n        } else if (keccak256(bytes(_role)) == keccak256(bytes(\"Retailer\"))) {\r\n            batch.retailer = _to;\r\n        }\r\n\r\n        // Push to history\r\n        string memory historyEntry = string(abi.encodePacked(\"Transferred to \", _role));\r\n        batch.transferHistory.push(historyEntry);\r\n\r\n        emit BatchTransferred(_batchId, previousOwner, _to, _role);\r\n    }\r\n\r\n    // 3. Report Problem (New Requirement for Retailer / Owner)\r\n    function reportProblem(string memory _batchId, string memory _problem) public {\r\n        Batch storage batch = batches[_batchId];\r\n        require(bytes(batch.batchId).length > 0, \"Batch does not exist\");\r\n        require(!batch.isRecalled, \"Batch is already recalled\");\r\n\r\n        problemReports[_batchId] = ProblemReport({\r\n            reportedBy: msg.sender,\r\n            problem: _problem,\r\n            timestamp: block.timestamp,\r\n            exists: true\r\n        });\r\n\r\n        emit ProblemReported(_batchId, msg.sender, _problem, block.timestamp);\r\n    }\r\n\r\n    // 4. Recall Batch (Manufacturer)\r\n    function recallBatch(string memory _batchId, string memory _reason) public {\r\n        Batch storage batch = batches[_batchId];\r\n        require(bytes(batch.batchId).length > 0, \"Batch does not exist\");\r\n        require(msg.sender == batch.manufacturer, \"Only manufacturer can recall\");\r\n\r\n        batch.isRecalled = true;\r\n        batch.recallReason = _reason;\r\n        batch.transferHistory.push(\"Recalled by Manufacturer\");\r\n\r\n        emit BatchRecalled(_batchId, _reason);\r\n    }\r\n\r\n    // 5. Getters\r\n    function getBatch(string memory _batchId) public view returns (Batch memory) {\r\n        require(bytes(batches[_batchId].batchId).length > 0, \"Batch does not exist\");\r\n        return batches[_batchId];\r\n    }\r\n\r\n    function getProblemReport(string memory _batchId) public view returns (ProblemReport memory) {\r\n        return problemReports[_batchId];\r\n    }\r\n}"
+      }
+    }
+  }
+}

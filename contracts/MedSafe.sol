@@ -2,6 +2,14 @@
 pragma solidity ^0.8.0;
 
 contract MedSafe {
+
+    enum Role {
+        None,
+        Manufacturer,
+        Distributor,
+        Retailer
+    }
+
     struct Batch {
         string batchId;
         string productName;
@@ -13,116 +21,212 @@ contract MedSafe {
         address currentOwner;
         bool isRecalled;
         string recallReason;
-        string[] transferHistory;
     }
 
-    struct ProblemReport {
-        address reportedBy;
-        string problem;
+    struct TransferRecord {
+        address from;
+        address to;
         uint256 timestamp;
-        bool exists;
     }
 
-    // Mappings
+    address private admin;
+
+    mapping(address => Role) public roles;
     mapping(string => Batch) public batches;
-    mapping(string => ProblemReport) public problemReports;
-    string[] public allBatchIds;
+    mapping(string => TransferRecord[]) public transferHistory;
 
-    // Events
-    event BatchCreated(string batchId, string productName, address manufacturer, string mfgDate, string expiryDate);
-    event BatchTransferred(string batchId, address from, address to, string role);
-    event BatchRecalled(string batchId, string reason);
-    event ProblemReported(string batchId, address reportedBy, string problem, uint256 timestamp);
+    event RoleAssigned(address account, Role role);
 
-    // 1. Create Batch (Manufacturer)
-    function createBatch(
+    event BatchCreated(
+        string batchId,
+        address manufacturer
+    );
+
+    event OwnershipTransferred(
+        string batchId,
+        address from,
+        address to
+    );
+
+    event BatchRecalled(
+        string batchId,
+        string reason
+    );
+
+    constructor() {
+        admin = msg.sender;
+    }
+
+    function assignRole(
+        address _account,
+        Role _role
+    ) public {
+        require(msg.sender == admin, "Only admin can assign roles");
+
+        roles[_account] = _role;
+
+        emit RoleAssigned(_account, _role);
+    }
+
+    function getRole(
+        address _account
+    ) public view returns (Role) {
+        return roles[_account];
+    }
+
+    function addBatch(
         string memory _batchId,
         string memory _productName,
         string memory _mfgDate,
-        string memory _expiryDate
+        string memory _expiryDate,
+        address _distributor
     ) public {
-        require(bytes(batches[_batchId].batchId).length == 0, "Batch already exists");
+        require(
+            roles[msg.sender] == Role.Manufacturer,
+            "Only manufacturer can add batch"
+        );
 
-        string[] memory initialHistory = new string[](1);
-        initialHistory[0] = "Created by Manufacturer";
+        require(
+            bytes(batches[_batchId].batchId).length == 0,
+            "Batch already exists"
+        );
+
+        require(
+            roles[_distributor] == Role.Distributor,
+            "Address must be distributor"
+        );
 
         batches[_batchId] = Batch({
             batchId: _batchId,
             productName: _productName,
             manufacturer: msg.sender,
-            distributor: address(0),
+            distributor: _distributor,
             retailer: address(0),
             mfgDate: _mfgDate,
             expiryDate: _expiryDate,
-            currentOwner: msg.sender,
+            currentOwner: _distributor,
             isRecalled: false,
-            recallReason: "",
-            transferHistory: initialHistory
+            recallReason: ""
         });
 
-        allBatchIds.push(_batchId);
-        emit BatchCreated(_batchId, _productName, msg.sender, _mfgDate, _expiryDate);
+        transferHistory[_batchId].push(
+            TransferRecord({
+                from: msg.sender,
+                to: _distributor,
+                timestamp: block.timestamp
+            })
+        );
+
+        emit BatchCreated(_batchId, msg.sender);
+
+        emit OwnershipTransferred(
+            _batchId,
+            msg.sender,
+            _distributor
+        );
     }
 
-    // 2. Transfer Batch (Manufacturer -> Distributor -> Retailer)
-    function transferBatch(string memory _batchId, address _to, string memory _role) public {
+    function transferOwnership(
+        string memory _batchId,
+        address _newOwner
+    ) public {
         Batch storage batch = batches[_batchId];
-        require(bytes(batch.batchId).length > 0, "Batch does not exist");
-        require(msg.sender == batch.currentOwner, "Only current owner can transfer");
-        require(!batch.isRecalled, "Cannot transfer a recalled batch");
+
+        require(
+            bytes(batch.batchId).length > 0,
+            "Batch does not exist"
+        );
+
+        require(
+            msg.sender == batch.currentOwner,
+            "Only current owner can transfer"
+        );
+
+        require(
+            !batch.isRecalled,
+            "Cannot transfer recalled batch"
+        );
+
+        require(
+            roles[msg.sender] == Role.Distributor &&
+            roles[_newOwner] == Role.Retailer,
+            "Invalid custody transfer"
+        );
 
         address previousOwner = batch.currentOwner;
-        batch.currentOwner = _to;
 
-        if (keccak256(bytes(_role)) == keccak256(bytes("Distributor"))) {
-            batch.distributor = _to;
-        } else if (keccak256(bytes(_role)) == keccak256(bytes("Retailer"))) {
-            batch.retailer = _to;
-        }
+        batch.retailer = _newOwner;
+        batch.currentOwner = _newOwner;
 
-        // Push to history
-        string memory historyEntry = string(abi.encodePacked("Transferred to ", _role));
-        batch.transferHistory.push(historyEntry);
+        transferHistory[_batchId].push(
+            TransferRecord({
+                from: previousOwner,
+                to: _newOwner,
+                timestamp: block.timestamp
+            })
+        );
 
-        emit BatchTransferred(_batchId, previousOwner, _to, _role);
+        emit OwnershipTransferred(
+            _batchId,
+            previousOwner,
+            _newOwner
+        );
     }
 
-    // 3. Report Problem (New Requirement for Retailer / Owner)
-    function reportProblem(string memory _batchId, string memory _problem) public {
+    function recallBatch(
+        string memory _batchId,
+        string memory _reason
+    ) public {
         Batch storage batch = batches[_batchId];
-        require(bytes(batch.batchId).length > 0, "Batch does not exist");
-        require(!batch.isRecalled, "Batch is already recalled");
 
-        problemReports[_batchId] = ProblemReport({
-            reportedBy: msg.sender,
-            problem: _problem,
-            timestamp: block.timestamp,
-            exists: true
-        });
+        require(
+            bytes(batch.batchId).length > 0,
+            "Batch does not exist"
+        );
 
-        emit ProblemReported(_batchId, msg.sender, _problem, block.timestamp);
-    }
-
-    // 4. Recall Batch (Manufacturer)
-    function recallBatch(string memory _batchId, string memory _reason) public {
-        Batch storage batch = batches[_batchId];
-        require(bytes(batch.batchId).length > 0, "Batch does not exist");
-        require(msg.sender == batch.manufacturer, "Only manufacturer can recall");
+        require(
+            msg.sender == batch.manufacturer,
+            "Only manufacturer can recall"
+        );
 
         batch.isRecalled = true;
         batch.recallReason = _reason;
-        batch.transferHistory.push("Recalled by Manufacturer");
 
-        emit BatchRecalled(_batchId, _reason);
+        emit BatchRecalled(
+            _batchId,
+            _reason
+        );
     }
 
-    // 5. Getters
-    function getBatch(string memory _batchId) public view returns (Batch memory) {
-        require(bytes(batches[_batchId].batchId).length > 0, "Batch does not exist");
+    function getBatchDetails(
+        string memory _batchId
+    ) public view returns (Batch memory) {
+        require(
+            bytes(batches[_batchId].batchId).length > 0,
+            "Batch does not exist"
+        );
+
         return batches[_batchId];
     }
 
-    function getProblemReport(string memory _batchId) public view returns (ProblemReport memory) {
-        return problemReports[_batchId];
+    function checkStatus(
+        string memory _batchId
+    ) public view returns (string memory) {
+        require(
+            bytes(batches[_batchId].batchId).length > 0,
+            "Batch does not exist"
+        );
+
+        if (batches[_batchId].isRecalled) {
+            return "RECALLED";
+        }
+
+        return "SAFE";
+    }
+
+    function getTransferHistory(
+        string memory _batchId
+    ) public view returns (TransferRecord[] memory) {
+        return transferHistory[_batchId];
     }
 }

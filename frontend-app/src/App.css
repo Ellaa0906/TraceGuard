@@ -82,6 +82,7 @@ body { margin: 0; background: var(--ink); color: var(--text-on-ink); font-family
 .panel { background: var(--ink-soft); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 28px; }
 .panel h2 { font-family: 'IBM Plex Serif', serif; margin: 0 0 6px; font-size: 20px; }
 .section-sub { margin: 0 0 20px; font-size: 13px; color: rgba(237,235,227,0.55); }
+.hint { font-size: 13px; color: rgba(237,235,227,0.45); }
 
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
 
@@ -127,6 +128,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 .stamp-safe { color: var(--stamp-green); }
 .stamp-recalled { color: var(--stamp-red); }
+.stamp-flagged { color: var(--amber); }
 
 dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
 dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #7A7360; margin-top: 14px; }
