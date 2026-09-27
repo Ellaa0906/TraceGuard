@@ -26,14 +26,17 @@ function App() {
 
   const [receiveBatchId, setReceiveBatchId] = useState("");
 
+  const [resolveBatchId, setResolveBatchId] = useState("");
+
   const [trackId, setTrackId] = useState("");
   const [batchDetails, setBatchDetails] = useState(null);
   const [problemReport, setProblemReport] = useState(null);
+  const [allBatches, setAllBatches] = useState([]);
 
   const validTabsByRole = {
-    Manufacturer: ["overview", "create", "transfer", "recall", "track"],
-    Distributor: ["overview", "track", "transfer"],
-    Retailer: ["overview", "track", "receive", "problem"],
+    Manufacturer: ["overview", "create", "transfer", "recall", "resolve", "track", "all"],
+    Distributor: ["overview", "track", "transfer", "all"],
+    Retailer: ["overview", "track", "receive", "problem", "all"],
   };
 
   const tabsByRole = {
@@ -42,44 +45,61 @@ function App() {
       { id: "create", label: "Create Batch" },
       { id: "transfer", label: "Transfer to Distributor" },
       { id: "recall", label: "Recall" },
+      { id: "resolve", label: "Resolve Problem" },
       { id: "track", label: "Track Batch" },
+      { id: "all", label: "All Batches" },
     ],
+
     Distributor: [
       { id: "overview", label: "Overview" },
       { id: "track", label: "Track Batch" },
       { id: "transfer", label: "Transfer to Retailer" },
+      { id: "all", label: "All Batches" },
     ],
+
     Retailer: [
       { id: "overview", label: "Overview" },
       { id: "track", label: "Track Batch" },
       { id: "receive", label: "Confirm Receipt" },
       { id: "problem", label: "Report Problem" },
+      { id: "all", label: "All Batches" },
     ],
   };
 
   const tabs = tabsByRole[currentRole];
 
   useEffect(() => {
-    if (currentRole === "Manufacturer") setTransferRole("Distributor");
-    if (currentRole === "Distributor") setTransferRole("Retailer");
+    if (currentRole === "Manufacturer") {
+      setTransferRole("Distributor");
+    }
+
+    if (currentRole === "Distributor") {
+      setTransferRole("Retailer");
+    }
 
     if (!validTabsByRole[currentRole].includes(activeTab)) {
       setActiveTab(validTabsByRole[currentRole][0]);
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRole]);
 
   useEffect(() => {
     async function autoConnect() {
       if (window.ethereum) {
-        const accounts = await window.ethereum.request({ method: "eth_accounts" });
+        const accounts = await window.ethereum.request({
+          method: "eth_accounts",
+        });
+
         if (accounts.length > 0) {
           const contract = await getContract();
           const signerAddress = await contract.runner.getAddress();
+
           setAccount(signerAddress);
         }
       }
     }
+
     autoConnect();
   }, []);
 
@@ -97,18 +117,28 @@ function App() {
     window.ethereum.on("accountsChanged", handleAccountsChanged);
 
     return () => {
-      window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      window.ethereum.removeListener(
+        "accountsChanged",
+        handleAccountsChanged
+      );
     };
   }, []);
 
   async function withLoading(fn) {
     setLoading(true);
     setMessage("");
+
     try {
       await fn();
     } catch (error) {
       console.log(error);
-      setMessage(error.reason || error.shortMessage || error.message);
+
+      setMessage(
+        error.reason ||
+          error.shortMessage ||
+          error.message ||
+          "Something went wrong."
+      );
     } finally {
       setLoading(false);
     }
@@ -118,6 +148,7 @@ function App() {
     withLoading(async () => {
       const contract = await getContract();
       const signerAddress = await contract.runner.getAddress();
+
       setAccount(signerAddress);
       setMessage("Wallet connected.");
     });
@@ -126,61 +157,142 @@ function App() {
   async function createBatch() {
     withLoading(async () => {
       const contract = await getContract();
-      const tx = await contract.createBatch(batchId, productName, mfgDate, expiryDate);
+
+      const tx = await contract.createBatch(
+        batchId,
+        productName,
+        mfgDate,
+        expiryDate
+      );
+
       await tx.wait();
+
       setMessage("Batch created on-chain.");
-      setBatchId(""); setProductName(""); setMfgDate(""); setExpiryDate("");
+
+      setBatchId("");
+      setProductName("");
+      setMfgDate("");
+      setExpiryDate("");
     });
   }
 
   async function transferBatch() {
     withLoading(async () => {
       const contract = await getContract();
-      const tx = await contract.transferBatch(transferBatchId, transferTo, transferRole);
+
+      const tx = await contract.transferBatch(
+        transferBatchId,
+        transferTo,
+        transferRole
+      );
+
       await tx.wait();
-      setMessage(`Batch transferred to ${transferRole}.`);
-      setTransferBatchId(""); setTransferTo("");
+
+      setMessage("Batch transferred to " + transferRole + ".");
+
+      setTransferBatchId("");
+      setTransferTo("");
     });
   }
 
   async function recallBatch() {
     withLoading(async () => {
       const contract = await getContract();
-      const tx = await contract.recallBatch(recallBatchId, recallReason);
+
+      const tx = await contract.recallBatch(
+        recallBatchId,
+        recallReason
+      );
+
       await tx.wait();
+
       setMessage("Batch recalled.");
-      setRecallBatchId(""); setRecallReason("");
+
+      setRecallBatchId("");
+      setRecallReason("");
     });
   }
 
   async function reportProblem() {
     withLoading(async () => {
       const contract = await getContract();
-      const tx = await contract.reportProblem(problemBatchId, problemText);
+
+      const tx = await contract.reportProblem(
+        problemBatchId,
+        problemText
+      );
+
       await tx.wait();
+
       setMessage("Problem reported on-chain.");
-      setProblemBatchId(""); setProblemText("");
+
+      setProblemBatchId("");
+      setProblemText("");
     });
   }
 
   async function markReceived() {
     withLoading(async () => {
       const contract = await getContract();
+
       const tx = await contract.markReceived(receiveBatchId);
+
       await tx.wait();
+
       setMessage("Batch marked as received.");
+
       setReceiveBatchId("");
     });
   }
 
-  async function trackBatch() {
+  async function resolveProblem() {
     withLoading(async () => {
       const contract = await getContract();
-      const batch = await contract.getBatch(trackId);
+
+      const tx = await contract.resolveProblem(resolveBatchId);
+
+      await tx.wait();
+
+      setMessage("Problem marked as resolved.");
+
+      setResolveBatchId("");
+    });
+  }
+
+  async function loadAllBatches() {
+    withLoading(async () => {
+      const contract = await getContract();
+      const ids = [];
+      let i = 0;
+
+      while (true) {
+        try {
+          const id = await contract.allBatchIds(i);
+          ids.push(id);
+          i++;
+        } catch {
+          break;
+        }
+      }
+
+      setAllBatches(ids);
+      setMessage(`Found ${ids.length} batch(es).`);
+    });
+  }
+
+  async function trackBatch(idOverride) {
+    const idToUse = idOverride || trackId;
+
+    withLoading(async () => {
+      const contract = await getContract();
+
+      const batch = await contract.getBatch(idToUse);
+
       setBatchDetails(batch);
 
       try {
-        const report = await contract.getProblemReport(trackId);
+        const report = await contract.getProblemReport(idToUse);
+
         setProblemReport(report[3] ? report : null);
       } catch {
         setProblemReport(null);
@@ -191,21 +303,109 @@ function App() {
   }
 
   function shortAddr(addr) {
-    if (!addr || addr === "0x0000000000000000000000000000000000000000") return "—";
+    if (
+      !addr ||
+      addr === "0x0000000000000000000000000000000000000000"
+    ) {
+      return "—";
+    }
+
     return addr.slice(0, 6) + "..." + addr.slice(-4);
+  }
+
+  // Only used for CURRENT OWNER
+  function getOwnerRole(addr, batch) {
+    if (
+      !addr ||
+      addr === "0x0000000000000000000000000000000000000000"
+    ) {
+      return "—";
+    }
+
+    if (!batch) {
+      return shortAddr(addr);
+    }
+
+    const address = addr.toLowerCase();
+
+    const manufacturer = batch[2]?.toLowerCase();
+    const distributor = batch[3]?.toLowerCase();
+    const retailer = batch[4]?.toLowerCase();
+
+    if (address === manufacturer) {
+      return "Manufacturer";
+    }
+
+    if (address === distributor) {
+      return "Distributor";
+    }
+
+    if (address === retailer) {
+      return "Retailer";
+    }
+
+    return shortAddr(addr);
   }
 
   function formatTimestamp(ts) {
     const n = Number(ts);
-    if (!n) return "—";
+
+    if (!n) {
+      return "—";
+    }
+
     return new Date(n * 1000).toLocaleString();
   }
 
+  function isExpired(expiryDateStr) {
+    if (!expiryDateStr) return false;
+
+    const parts = expiryDateStr.split("-");
+    if (parts.length !== 3) return false;
+
+    const [day, month, year] = parts.map(Number);
+    if (!day || !month || !year) return false;
+
+    const expiry = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return expiry < today;
+  }
+
   function stampInfo() {
-    if (!batchDetails) return { label: "", cls: "" };
-    if (batchDetails[8]) return { label: "RECALLED", cls: "stamp-recalled" };
-    if (problemReport) return { label: "FLAGGED", cls: "stamp-flagged" };
-    return { label: "SAFE", cls: "stamp-safe" };
+    if (!batchDetails) {
+      return {
+        label: "",
+        cls: "",
+      };
+    }
+
+    if (batchDetails[8]) {
+      return {
+        label: "RECALLED",
+        cls: "stamp-recalled",
+      };
+    }
+
+    if (isExpired(batchDetails[6])) {
+      return {
+        label: "EXPIRED",
+        cls: "stamp-expired",
+      };
+    }
+
+    if (problemReport && !problemReport[4]) {
+      return {
+        label: "FLAGGED",
+        cls: "stamp-flagged",
+      };
+    }
+
+    return {
+      label: "SAFE",
+      cls: "stamp-safe",
+    };
   }
 
   const stamp = stampInfo();
@@ -215,28 +415,49 @@ function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">MS</span>
+
           <div>
             <h1>MedSafe</h1>
-            <p className="tagline">Medicine chain-of-custody and recall system</p>
+
+            <p className="tagline">
+              Medicine chain-of-custody and recall system
+            </p>
           </div>
         </div>
 
         <div className="wallet-box">
           {!account ? (
-            <button className="btn-primary" onClick={connectWallet} disabled={loading}>
+            <button
+              className="btn-primary"
+              onClick={connectWallet}
+              disabled={loading}
+            >
               {loading ? "Connecting…" : "Connect Wallet"}
             </button>
           ) : (
             <div className="wallet-info">
-              <span className="mono">{shortAddr(account)}</span>
+              <span className="mono">
+                {shortAddr(account)}
+              </span>
+
               <select
                 className="role-select"
                 value={currentRole}
-                onChange={(e) => setCurrentRole(e.target.value)}
+                onChange={(e) =>
+                  setCurrentRole(e.target.value)
+                }
               >
-                <option value="Manufacturer">🏭 Manufacturer</option>
-                <option value="Distributor">🚚 Distributor</option>
-                <option value="Retailer">🏪 Retailer</option>
+                <option value="Manufacturer">
+                  🏭 Manufacturer
+                </option>
+
+                <option value="Distributor">
+                  🚚 Distributor
+                </option>
+
+                <option value="Retailer">
+                  🏪 Retailer
+                </option>
               </select>
             </div>
           )}
@@ -245,7 +466,8 @@ function App() {
 
       {account && (
         <div className="role-banner">
-          Connected as <b>{currentRole}</b> — {shortAddr(account)}
+          Connected as <b>{currentRole}</b> —{" "}
+          {shortAddr(account)}
         </div>
       )}
 
@@ -261,7 +483,11 @@ function App() {
             {tabs.map((t) => (
               <button
                 key={t.id}
-                className={activeTab === t.id ? "tab active" : "tab"}
+                className={
+                  activeTab === t.id
+                    ? "tab active"
+                    : "tab"
+                }
                 onClick={() => setActiveTab(t.id)}
               >
                 {t.label}
@@ -273,34 +499,89 @@ function App() {
             {activeTab === "overview" && (
               <section>
                 <h2>{currentRole} Dashboard</h2>
+
                 <p className="section-sub">
-                  {currentRole === "Manufacturer" && "Create batches, hand them off to a distributor, track their journey, and recall defective products."}
-                  {currentRole === "Distributor" && "Track batches assigned to you and transfer them onward to a retailer once received."}
-                  {currentRole === "Retailer" && "Track batches you've received, confirm receipt, view chain of custody, and report any issues found."}
+                  {currentRole === "Manufacturer" &&
+                    "Create batches, hand them off to a distributor, track their journey, and recall defective products."}
+
+                  {currentRole === "Distributor" &&
+                    "Track batches assigned to you and transfer them onward to a retailer once received."}
+
+                  {currentRole === "Retailer" &&
+                    "Track batches you've received, confirm receipt, view chain of custody, and report any issues found."}
                 </p>
-                <p className="hint">Use <b>Track Batch</b> any time to search a Batch ID and see its full history.</p>
+
+                <p className="hint">
+                  Use <b>Track Batch</b> any time to search a
+                  Batch ID and see its full history.
+                </p>
               </section>
             )}
 
             {activeTab === "create" && (
               <section>
                 <h2>Create a Batch</h2>
-                <p className="section-sub">Registers a new batch. Your connected address becomes the manufacturer.</p>
+
+                <p className="section-sub">
+                  Registers a new batch. Your connected address
+                  becomes the manufacturer.
+                </p>
+
                 <div className="field-grid">
-                  <label>Batch ID
-                    <input placeholder="102" value={batchId} onChange={(e) => setBatchId(e.target.value)} />
+                  <label>
+                    Batch ID
+
+                    <input
+                      placeholder="102"
+                      value={batchId}
+                      onChange={(e) =>
+                        setBatchId(e.target.value)
+                      }
+                    />
                   </label>
-                  <label>Product Name
-                    <input placeholder="Paracetamol" value={productName} onChange={(e) => setProductName(e.target.value)} />
+
+                  <label>
+                    Product Name
+
+                    <input
+                      placeholder="Paracetamol"
+                      value={productName}
+                      onChange={(e) =>
+                        setProductName(e.target.value)
+                      }
+                    />
                   </label>
-                  <label>Manufacturing Date
-                    <input placeholder="DD-MM-YYYY" value={mfgDate} onChange={(e) => setMfgDate(e.target.value)} />
+
+                  <label>
+                    Manufacturing Date
+
+                    <input
+                      placeholder="DD-MM-YYYY"
+                      value={mfgDate}
+                      onChange={(e) =>
+                        setMfgDate(e.target.value)
+                      }
+                    />
                   </label>
-                  <label>Expiry Date
-                    <input placeholder="DD-MM-YYYY" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+
+                  <label>
+                    Expiry Date
+
+                    <input
+                      placeholder="DD-MM-YYYY"
+                      value={expiryDate}
+                      onChange={(e) =>
+                        setExpiryDate(e.target.value)
+                      }
+                    />
                   </label>
                 </div>
-                <button className="btn-primary" onClick={createBatch} disabled={loading}>
+
+                <button
+                  className="btn-primary"
+                  onClick={createBatch}
+                  disabled={loading}
+                >
                   {loading ? "Creating…" : "Create Batch"}
                 </button>
               </section>
@@ -308,18 +589,53 @@ function App() {
 
             {activeTab === "transfer" && (
               <section>
-                <h2>{currentRole === "Manufacturer" ? "Transfer to Distributor" : "Transfer to Retailer"}</h2>
-                <p className="section-sub">Only the current owner of a batch can transfer it.</p>
+                <h2>
+                  {currentRole === "Manufacturer"
+                    ? "Transfer to Distributor"
+                    : "Transfer to Retailer"}
+                </h2>
+
+                <p className="section-sub">
+                  Only the current owner of a batch can
+                  transfer it.
+                </p>
+
                 <div className="field-grid">
-                  <label>Batch ID
-                    <input placeholder="102" value={transferBatchId} onChange={(e) => setTransferBatchId(e.target.value)} />
+                  <label>
+                    Batch ID
+
+                    <input
+                      placeholder="102"
+                      value={transferBatchId}
+                      onChange={(e) =>
+                        setTransferBatchId(e.target.value)
+                      }
+                    />
                   </label>
-                  <label>{currentRole === "Manufacturer" ? "Distributor Address" : "Retailer Address"}
-                    <input placeholder="0x..." value={transferTo} onChange={(e) => setTransferTo(e.target.value)} />
+
+                  <label>
+                    {currentRole === "Manufacturer"
+                      ? "Distributor Address"
+                      : "Retailer Address"}
+
+                    <input
+                      placeholder="0x..."
+                      value={transferTo}
+                      onChange={(e) =>
+                        setTransferTo(e.target.value)
+                      }
+                    />
                   </label>
                 </div>
-                <button className="btn-primary" onClick={transferBatch} disabled={loading}>
-                  {loading ? "Transferring…" : "Transfer Batch"}
+
+                <button
+                  className="btn-primary"
+                  onClick={transferBatch}
+                  disabled={loading}
+                >
+                  {loading
+                    ? "Transferring…"
+                    : "Transfer Batch"}
                 </button>
               </section>
             )}
@@ -327,17 +643,80 @@ function App() {
             {activeTab === "recall" && (
               <section>
                 <h2>Recall Batch</h2>
-                <p className="section-sub">Only the manufacturer of a batch can recall it.</p>
+
+                <p className="section-sub">
+                  Only the manufacturer of a batch can recall
+                  it.
+                </p>
+
                 <div className="field-grid">
-                  <label>Batch ID
-                    <input placeholder="102" value={recallBatchId} onChange={(e) => setRecallBatchId(e.target.value)} />
+                  <label>
+                    Batch ID
+
+                    <input
+                      placeholder="102"
+                      value={recallBatchId}
+                      onChange={(e) =>
+                        setRecallBatchId(e.target.value)
+                      }
+                    />
                   </label>
-                  <label>Reason
-                    <input placeholder="Quality issue detected" value={recallReason} onChange={(e) => setRecallReason(e.target.value)} />
+
+                  <label>
+                    Reason
+
+                    <input
+                      placeholder="Quality issue detected"
+                      value={recallReason}
+                      onChange={(e) =>
+                        setRecallReason(e.target.value)
+                      }
+                    />
                   </label>
                 </div>
-                <button className="btn-danger" onClick={recallBatch} disabled={loading}>
-                  {loading ? "Recalling…" : "Recall Batch"}
+
+                <button
+                  className="btn-danger"
+                  onClick={recallBatch}
+                  disabled={loading}
+                >
+                  {loading
+                    ? "Recalling…"
+                    : "Recall Batch"}
+                </button>
+              </section>
+            )}
+
+            {activeTab === "resolve" && (
+              <section>
+                <h2>Resolve Problem</h2>
+
+                <p className="section-sub">
+                  Marks an existing problem report as resolved. Only the manufacturer can do this.
+                </p>
+
+                <div className="field-grid">
+                  <label>
+                    Batch ID
+
+                    <input
+                      placeholder="102"
+                      value={resolveBatchId}
+                      onChange={(e) =>
+                        setResolveBatchId(e.target.value)
+                      }
+                    />
+                  </label>
+                </div>
+
+                <button
+                  className="btn-primary"
+                  onClick={resolveProblem}
+                  disabled={loading}
+                >
+                  {loading
+                    ? "Resolving…"
+                    : "Resolve Problem"}
                 </button>
               </section>
             )}
@@ -345,14 +724,34 @@ function App() {
             {activeTab === "receive" && (
               <section>
                 <h2>Confirm Receipt</h2>
-                <p className="section-sub">Confirms you've received this batch. Only the current holder can confirm.</p>
+
+                <p className="section-sub">
+                  Confirms you've received this batch. Only
+                  the current holder can confirm.
+                </p>
+
                 <div className="field-grid">
-                  <label>Batch ID
-                    <input placeholder="102" value={receiveBatchId} onChange={(e) => setReceiveBatchId(e.target.value)} />
+                  <label>
+                    Batch ID
+
+                    <input
+                      placeholder="102"
+                      value={receiveBatchId}
+                      onChange={(e) =>
+                        setReceiveBatchId(e.target.value)
+                      }
+                    />
                   </label>
                 </div>
-                <button className="btn-primary" onClick={markReceived} disabled={loading}>
-                  {loading ? "Confirming…" : "Confirm Receipt"}
+
+                <button
+                  className="btn-primary"
+                  onClick={markReceived}
+                  disabled={loading}
+                >
+                  {loading
+                    ? "Confirming…"
+                    : "Confirm Receipt"}
                 </button>
               </section>
             )}
@@ -360,17 +759,46 @@ function App() {
             {activeTab === "problem" && (
               <section>
                 <h2>Report a Problem</h2>
-                <p className="section-sub">Records an issue with a batch on-chain. Batch must not already be recalled.</p>
+
+                <p className="section-sub">
+                  Records an issue with a batch on-chain. Batch
+                  must not already be recalled.
+                </p>
+
                 <div className="field-grid">
-                  <label>Batch ID
-                    <input placeholder="102" value={problemBatchId} onChange={(e) => setProblemBatchId(e.target.value)} />
+                  <label>
+                    Batch ID
+
+                    <input
+                      placeholder="102"
+                      value={problemBatchId}
+                      onChange={(e) =>
+                        setProblemBatchId(e.target.value)
+                      }
+                    />
                   </label>
-                  <label>Problem Description
-                    <input placeholder="Packaging damaged in transit" value={problemText} onChange={(e) => setProblemText(e.target.value)} />
+
+                  <label>
+                    Problem Description
+
+                    <input
+                      placeholder="Packaging damaged in transit"
+                      value={problemText}
+                      onChange={(e) =>
+                        setProblemText(e.target.value)
+                      }
+                    />
                   </label>
                 </div>
-                <button className="btn-danger" onClick={reportProblem} disabled={loading}>
-                  {loading ? "Reporting…" : "Report Problem"}
+
+                <button
+                  className="btn-danger"
+                  onClick={reportProblem}
+                  disabled={loading}
+                >
+                  {loading
+                    ? "Reporting…"
+                    : "Report Problem"}
                 </button>
               </section>
             )}
@@ -378,54 +806,190 @@ function App() {
             {activeTab === "track" && (
               <section>
                 <h2>Track a Batch</h2>
-                <p className="section-sub">Enter a Batch ID to see its full record and history.</p>
+
+                <p className="section-sub">
+                  Enter a Batch ID to see its full record and
+                  history.
+                </p>
+
                 <div className="field-grid">
-                  <label>Batch ID
-                    <input placeholder="102" value={trackId} onChange={(e) => setTrackId(e.target.value)} />
+                  <label>
+                    Batch ID
+
+                    <input
+                      placeholder="102"
+                      value={trackId}
+                      onChange={(e) =>
+                        setTrackId(e.target.value)
+                      }
+                    />
                   </label>
                 </div>
-                <button className="btn-secondary" onClick={trackBatch} disabled={loading}>
+
+                <button
+                  className="btn-secondary"
+                  onClick={() => trackBatch()}
+                  disabled={loading}
+                >
                   {loading ? "Searching…" : "Track Batch"}
                 </button>
 
                 {batchDetails && (
                   <div className="track-result">
-                    <div className={`stamp ${stamp.cls}`}>{stamp.label}</div>
+                    <div
+                      className={
+                        "stamp " + stamp.cls
+                      }
+                    >
+                      {stamp.label}
+                    </div>
 
                     <dl>
-                      <dt>Batch ID</dt><dd className="mono">{batchDetails[0]}</dd>
-                      <dt>Product</dt><dd>{batchDetails[1]}</dd>
-                      <dt>Manufacturer</dt><dd className="mono">{shortAddr(batchDetails[2])}</dd>
-                      <dt>Distributor</dt><dd className="mono">{shortAddr(batchDetails[3])}</dd>
-                      <dt>Retailer</dt><dd className="mono">{shortAddr(batchDetails[4])}</dd>
-                      <dt>Mfg Date</dt><dd>{batchDetails[5]}</dd>
-                      <dt>Expiry Date</dt><dd>{batchDetails[6]}</dd>
-                      <dt>Current Owner</dt><dd className="mono">{shortAddr(batchDetails[7])}</dd>
-                      <dt>Received</dt><dd>{batchDetails[10] ? "Yes" : "No"}</dd>
-                      <dt>Recall Reason</dt><dd>{batchDetails[9] || "—"}</dd>
+                      <dt>Batch ID</dt>
+
+                      <dd className="mono">
+                        {batchDetails[0]}
+                      </dd>
+
+                      <dt>Product</dt>
+
+                      <dd>{batchDetails[1]}</dd>
+
+                      {/* KEEP THESE AS WALLET ADDRESSES */}
+                      <dt>Manufacturer</dt>
+
+                      <dd className="mono">
+                        {shortAddr(batchDetails[2])}
+                      </dd>
+
+                      <dt>Distributor</dt>
+
+                      <dd className="mono">
+                        {shortAddr(batchDetails[3])}
+                      </dd>
+
+                      <dt>Retailer</dt>
+
+                      <dd className="mono">
+                        {shortAddr(batchDetails[4])}
+                      </dd>
+
+                      <dt>Mfg Date</dt>
+
+                      <dd>{batchDetails[5]}</dd>
+
+                      <dt>Expiry Date</dt>
+
+                      <dd>{batchDetails[6]}</dd>
+
+                      {/* ONLY THIS SHOWS THE ROLE */}
+                      <dt>Current Owner</dt>
+
+                      <dd>
+                        {getOwnerRole(
+                          batchDetails[7],
+                          batchDetails
+                        )}
+                      </dd>
+
+                      <dt>Received</dt>
+
+                      <dd>
+                        {batchDetails[10] ? "Yes" : "No"}
+                      </dd>
+
+                      <dt>Recall Reason</dt>
+
+                      <dd>
+                        {batchDetails[9] || "—"}
+                      </dd>
                     </dl>
 
                     {problemReport && (
-                      <div className="alert-banner">
-                        ⚠️ Problem reported by {shortAddr(problemReport[0])}: "{problemReport[1]}" on {formatTimestamp(problemReport[2])}
+                      <div className={problemReport[4] ? "alert-banner alert-resolved" : "alert-banner"}>
+                        {problemReport[4] ? "✅ Resolved — " : "⚠️ "}
+                        Problem reported by{" "}
+                        {shortAddr(problemReport[0])}: "
+                        {problemReport[1]}" on{" "}
+                        {formatTimestamp(
+                          problemReport[2]
+                        )}
                       </div>
                     )}
 
-                    <h3 className="timeline-title">Transfer History</h3>
+                    <h3 className="timeline-title">
+                      Transfer History
+                    </h3>
+
                     <div className="timeline">
-                      {batchDetails[11].map((entry, i) => (
-                        <div className="timeline-step" key={i}>
-                          <span className={entry.toLowerCase().includes("recalled") ? "dot dot-recalled" : "dot"} />
-                          <p className="timeline-label">{entry}</p>
-                        </div>
-                      ))}
+                      {batchDetails[11].map(
+                        (entry, i) => (
+                          <div
+                            className="timeline-step"
+                            key={i}
+                          >
+                            <span
+                              className={
+                                entry
+                                  .toLowerCase()
+                                  .includes("recalled")
+                                  ? "dot dot-recalled"
+                                  : "dot"
+                              }
+                            />
+
+                            <p className="timeline-label">
+                              {entry}
+                            </p>
+                          </div>
+                        )
+                      )}
                     </div>
                   </div>
                 )}
               </section>
             )}
 
-            {message && <p className="message">{message}</p>}
+            {activeTab === "all" && (
+              <section>
+                <h2>All Batches</h2>
+                <p className="section-sub">
+                  Browse every batch that has been created on this contract.
+                </p>
+
+                <button
+                  className="btn-secondary"
+                  onClick={loadAllBatches}
+                  disabled={loading}
+                >
+                  {loading ? "Loading…" : "Load All Batches"}
+                </button>
+
+                {allBatches.length > 0 && (
+                  <div className="batch-list">
+                    {allBatches.map((id) => (
+                      <button
+                        key={id}
+                        className="batch-list-item"
+                        onClick={() => {
+                          setTrackId(id);
+                          setActiveTab("track");
+                          trackBatch(id);
+                        }}
+                      >
+                        {id}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {message && (
+              <p className="message">
+                {message}
+              </p>
+            )}
           </main>
         </div>
       )}

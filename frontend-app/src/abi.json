@@ -178,6 +178,19 @@
 		"type": "event"
 	},
 	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "batchId",
+				"type": "string"
+			}
+		],
+		"name": "ProblemResolved",
+		"type": "event"
+	},
+	{
 		"inputs": [
 			{
 				"internalType": "string",
@@ -209,6 +222,19 @@
 			}
 		],
 		"name": "reportProblem",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_batchId",
+				"type": "string"
+			}
+		],
+		"name": "resolveProblem",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -436,6 +462,11 @@
 						"internalType": "bool",
 						"name": "exists",
 						"type": "bool"
+					},
+					{
+						"internalType": "bool",
+						"name": "resolved",
+						"type": "bool"
 					}
 				],
 				"internalType": "struct MedSafe.ProblemReport",
@@ -474,6 +505,11 @@
 			{
 				"internalType": "bool",
 				"name": "exists",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "resolved",
 				"type": "bool"
 			}
 		],

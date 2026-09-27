@@ -1,0 +1,42 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_20-07d9eb84a9a59206f9a98220bd3cf7a2e7d0a15e",
+  "solcVersion": "0.8.20",
+  "solcLongVersion": "0.8.20+commit.a1b79de6",
+  "compilerType": "solc",
+  "userSourceNameMap": {
+    "contracts/MedSafe.sol": "project/contracts/MedSafe.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "shanghai",
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode.linkReferences",
+            "evm.bytecode.object",
+            "evm.bytecode.opcodes",
+            "evm.bytecode.sourceMap",
+            "evm.deployedBytecode.immutableReferences",
+            "evm.deployedBytecode.linkReferences",
+            "evm.deployedBytecode.object",
+            "evm.deployedBytecode.opcodes",
+            "evm.deployedBytecode.sourceMap",
+            "evm.methodIdentifiers"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/MedSafe.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.0;\r\n\r\ncontract MedSafe {\r\n\r\n    enum Role {\r\n        None,\r\n        Manufacturer,\r\n        Distributor,\r\n        Retailer\r\n    }\r\n\r\n    struct Batch {\r\n        string batchId;\r\n        string productName;\r\n        address manufacturer;\r\n        address distributor;\r\n        address retailer;\r\n        string mfgDate;\r\n        string expiryDate;\r\n        address currentOwner;\r\n        bool isRecalled;\r\n        string recallReason;\r\n    }\r\n\r\n    struct TransferRecord {\r\n        address from;\r\n        address to;\r\n        uint256 timestamp;\r\n    }\r\n\r\n    address private admin;\r\n\r\n    mapping(address => Role) public roles;\r\n    mapping(string => Batch) public batches;\r\n    mapping(string => TransferRecord[]) public transferHistory;\r\n\r\n    event RoleAssigned(address account, Role role);\r\n\r\n    event BatchCreated(\r\n        string batchId,\r\n        address manufacturer\r\n    );\r\n\r\n    event OwnershipTransferred(\r\n        string batchId,\r\n        address from,\r\n        address to\r\n    );\r\n\r\n    event BatchRecalled(\r\n        string batchId,\r\n        string reason\r\n    );\r\n\r\n    constructor() {\r\n        admin = msg.sender;\r\n    }\r\n\r\n    function assignRole(\r\n        address _account,\r\n        Role _role\r\n    ) public {\r\n        require(msg.sender == admin, \"Only admin can assign roles\");\r\n\r\n        roles[_account] = _role;\r\n\r\n        emit RoleAssigned(_account, _role);\r\n    }\r\n\r\n    function getRole(\r\n        address _account\r\n    ) public view returns (Role) {\r\n        return roles[_account];\r\n    }\r\n\r\n    function addBatch(\r\n        string memory _batchId,\r\n        string memory _productName,\r\n        string memory _mfgDate,\r\n        string memory _expiryDate,\r\n        address _distributor\r\n    ) public {\r\n        require(\r\n            roles[msg.sender] == Role.Manufacturer,\r\n            \"Only manufacturer can add batch\"\r\n        );\r\n\r\n        require(\r\n            bytes(batches[_batchId].batchId).length == 0,\r\n            \"Batch already exists\"\r\n        );\r\n\r\n        require(\r\n            roles[_distributor] == Role.Distributor,\r\n            \"Address must be distributor\"\r\n        );\r\n\r\n        batches[_batchId] = Batch({\r\n            batchId: _batchId,\r\n            productName: _productName,\r\n            manufacturer: msg.sender,\r\n            distributor: _distributor,\r\n            retailer: address(0),\r\n            mfgDate: _mfgDate,\r\n            expiryDate: _expiryDate,\r\n            currentOwner: _distributor,\r\n            isRecalled: false,\r\n            recallReason: \"\"\r\n        });\r\n\r\n        transferHistory[_batchId].push(\r\n            TransferRecord({\r\n                from: msg.sender,\r\n                to: _distributor,\r\n                timestamp: block.timestamp\r\n            })\r\n        );\r\n\r\n        emit BatchCreated(_batchId, msg.sender);\r\n\r\n        emit OwnershipTransferred(\r\n            _batchId,\r\n            msg.sender,\r\n            _distributor\r\n        );\r\n    }\r\n\r\n    function transferOwnership(\r\n        string memory _batchId,\r\n        address _newOwner\r\n    ) public {\r\n        Batch storage batch = batches[_batchId];\r\n\r\n        require(\r\n            bytes(batch.batchId).length > 0,\r\n            \"Batch does not exist\"\r\n        );\r\n\r\n        require(\r\n            msg.sender == batch.currentOwner,\r\n            \"Only current owner can transfer\"\r\n        );\r\n\r\n        require(\r\n            !batch.isRecalled,\r\n            \"Cannot transfer recalled batch\"\r\n        );\r\n\r\n        require(\r\n            roles[msg.sender] == Role.Distributor &&\r\n            roles[_newOwner] == Role.Retailer,\r\n            \"Invalid custody transfer\"\r\n        );\r\n\r\n        address previousOwner = batch.currentOwner;\r\n\r\n        batch.retailer = _newOwner;\r\n        batch.currentOwner = _newOwner;\r\n\r\n        transferHistory[_batchId].push(\r\n            TransferRecord({\r\n                from: previousOwner,\r\n                to: _newOwner,\r\n                timestamp: block.timestamp\r\n            })\r\n        );\r\n\r\n        emit OwnershipTransferred(\r\n            _batchId,\r\n            previousOwner,\r\n            _newOwner\r\n        );\r\n    }\r\n\r\n    function recallBatch(\r\n        string memory _batchId,\r\n        string memory _reason\r\n    ) public {\r\n        Batch storage batch = batches[_batchId];\r\n\r\n        require(\r\n            bytes(batch.batchId).length > 0,\r\n            \"Batch does not exist\"\r\n        );\r\n\r\n        require(\r\n            msg.sender == batch.manufacturer,\r\n            \"Only manufacturer can recall\"\r\n        );\r\n\r\n        batch.isRecalled = true;\r\n        batch.recallReason = _reason;\r\n\r\n        emit BatchRecalled(\r\n            _batchId,\r\n            _reason\r\n        );\r\n    }\r\n\r\n    function getBatchDetails(\r\n        string memory _batchId\r\n    ) public view returns (Batch memory) {\r\n        require(\r\n            bytes(batches[_batchId].batchId).length > 0,\r\n            \"Batch does not exist\"\r\n        );\r\n\r\n        return batches[_batchId];\r\n    }\r\n\r\n    function checkStatus(\r\n        string memory _batchId\r\n    ) public view returns (string memory) {\r\n        require(\r\n            bytes(batches[_batchId].batchId).length > 0,\r\n            \"Batch does not exist\"\r\n        );\r\n\r\n        if (batches[_batchId].isRecalled) {\r\n            return \"RECALLED\";\r\n        }\r\n\r\n        return \"SAFE\";\r\n    }\r\n\r\n    function getTransferHistory(\r\n        string memory _batchId\r\n    ) public view returns (TransferRecord[] memory) {\r\n        return transferHistory[_batchId];\r\n    }\r\n}"
+      }
+    }
+  }
+}
